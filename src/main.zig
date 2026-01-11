@@ -1,5 +1,6 @@
 const std = @import("std");
 const filesystem = @import("filesystem.zig");
+const parser = @import("parser.zig");
 
 pub fn main() void {
     var gpa = std.heap.DebugAllocator(.{}).init;
@@ -16,7 +17,20 @@ pub fn main() void {
     for (content_listing.employment) |f| {
         const file_content = filesystem.load_file(allocator, f) catch @panic("uh oh");
         defer allocator.free(file_content);
-        std.debug.print("{s}\n", .{file_content});
+        const entry = parser.parseEntry(allocator, file_content, .Employment) catch @panic("There was an issue parsing bro");
+        defer entry.deinit(allocator);
+        std.debug.print("title: {s}\n", .{entry.title});
+        std.debug.print("{s}\n", .{entry.text});
+    }
+    for (content_listing.projects) |f| {
+        const file_content = filesystem.load_file(allocator, f) catch @panic("uh oh");
+        defer allocator.free(file_content);
+        const entry = parser.parseEntry(allocator, file_content, .Project) catch @panic("There was an issue parsing bro");
+        defer entry.deinit(allocator);
+        std.debug.print("title: {s}\n", .{entry.title});
+        for (entry.data.Project.tags) |t| {
+            std.debug.print("  - '{s}'\n", .{t});
+        }
     }
 }
 
