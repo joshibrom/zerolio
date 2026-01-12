@@ -16,28 +16,8 @@ pub fn main() void {
 
     var arena = std.heap.ArenaAllocator.init(gpa_allocator);
     defer if (!arena.reset(.free_all)) @panic("Could not free all memory."); // FIXME: Update method of panicking
-    const arena_allocator = arena.allocator();
 
-    for (content_listing.employment) |f| {
-        const file_content = filesystem.load_file(arena_allocator, f) catch @panic("uh oh");
-        defer arena_allocator.free(file_content);
-        const entry = parser.parseEntry(arena_allocator, file_content, .Employment) catch @panic("There was an issue parsing bro");
-        defer entry.deinit(arena_allocator);
-        std.debug.print("title: {s}\n", .{entry.title});
-        std.debug.print("{s}\n", .{entry.text});
-    }
-    // NOTE: I would like to use an arena so that each entry type resets all memory when no longer needed
-    if (!arena.reset(.free_all)) @panic("Could not free all memory."); // FIXME: Update method of panicking
-    for (content_listing.projects) |f| {
-        const file_content = filesystem.load_file(arena_allocator, f) catch @panic("uh oh");
-        defer arena_allocator.free(file_content);
-        const entry = parser.parseEntry(arena_allocator, file_content, .Project) catch @panic("There was an issue parsing bro");
-        defer entry.deinit(arena_allocator);
-        std.debug.print("title: {s}\n", .{entry.title});
-        for (entry.data.Project.tags) |t| {
-            std.debug.print("  - '{s}'\n", .{t});
-        }
-    }
+    render_content_listing(&arena, stderr, &content_listing);
 }
 
 /// Helper function to get filenames from content directory and handle errors.
@@ -54,4 +34,41 @@ fn get_content_dir_files(allocator: std.mem.Allocator, stderr: *std.io.Writer) f
         stderr.flush() catch {};
         std.process.exit(1);
     };
+}
+
+/// Renders files from the listing of content.
+fn render_content_listing(arena: *std.heap.ArenaAllocator, stderr: *std.io.Writer, content_listing: *const filesystem.ContentListing) void {
+    // TODO: Determine if there's a better way of dealing with the arena and rendering files.
+    // I still need to figure out how I'd like to keep memory alive for things like rendering
+    // the list of projects and stuff on common pages.
+    const allocator = arena.allocator();
+    for (content_listing.employment) |f| {
+        const file_content = filesystem.load_file(allocator, f) catch |err| {
+            stderr.print("[E] Could not load file: {}.\n", .{err}) catch {};
+            std.process.exit(1);
+        };
+        const entry = parser.parseEntry(allocator, file_content, .Employment) catch |err| {
+            stderr.print("[E] Could not parse entry: {}.\n", .{err}) catch {};
+            std.process.exit(1);
+        };
+        std.debug.print("title: {s}\n", .{entry.title});
+        std.debug.print("{s}\n", .{entry.text});
+    }
+
+    if (!arena.reset(.retain_capacity)) stderr.print("[E] Could not reset arena.", .{}) catch {};
+
+    for (content_listing.projects) |f| {
+        const file_content = filesystem.load_file(allocator, f) catch |err| {
+            stderr.print("[E] Could not load file: {}.\n", .{err}) catch {};
+            std.process.exit(1);
+        };
+        const entry = parser.parseEntry(allocator, file_content, .Project) catch |err| {
+            stderr.print("[E] Could not parse entry: {}.\n", .{err}) catch {};
+            std.process.exit(1);
+        };
+        std.debug.print("title: {s}\n", .{entry.title});
+        for (entry.data.Project.tags) |t| {
+            std.debug.print("  - '{s}'\n", .{t});
+        }
+    }
 }
