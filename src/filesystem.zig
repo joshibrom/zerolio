@@ -93,3 +93,28 @@ pub fn load_file(allocator: Allocator, path: []const u8) ![]const u8 {
     const max_bytes = 16 * 1024 * 1024;
     return std.fs.cwd().readFileAlloc(allocator, path, max_bytes);
 }
+
+pub fn write_file(placement_path: []const u8, filename: []const u8, content: []const u8) !void {
+    var path_parts = try std.fs.path.componentIterator(placement_path);
+    while (path_parts.next()) |comp| {
+        const parent_path = comp.path[0 .. comp.path.len - comp.name.len];
+        var dir, const should_close = switch (parent_path.len) {
+            0 => .{ std.fs.cwd(), false },
+            else => .{ try std.fs.cwd().openDir(parent_path, .{}), true },
+        };
+        defer if (should_close) dir.close();
+        try ensure_dir_exists(&dir, comp.name);
+    }
+    var dir = try std.fs.cwd().openDir(placement_path, .{});
+    defer dir.close();
+    const f = try dir.createFile(filename, .{});
+    defer f.close();
+    _ = try f.write(content);
+}
+
+fn ensure_dir_exists(dir: *const std.fs.Dir, dirname: []const u8) !void {
+    dir.makeDir(dirname) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => return err,
+    };
+}
