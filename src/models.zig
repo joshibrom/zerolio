@@ -1,5 +1,3 @@
-const Allocator = @import("std").mem.Allocator;
-
 /// Stores a range of dates from a start `s` to an end `e`.
 pub const DateRange = struct {
     s: []const u8,
@@ -23,12 +21,6 @@ pub const ProjectEntryData = struct {
     tags: []const []const u8,
     deployments: []const []const u8 = &.{},
     repositories: []const []const u8 = &.{},
-
-    pub fn deinit(self: Self, allocator: Allocator) void {
-        allocator.free(self.tags);
-        allocator.free(self.deployments);
-        allocator.free(self.repositories);
-    }
 };
 
 /// Wrapper type to safely store metadata about employment or projects.
@@ -37,13 +29,6 @@ pub const EntryData = union(EntryCategory) {
 
     Employment: EmploymentEntryData,
     Project: ProjectEntryData,
-
-    pub fn deinit(self: Self, allocator: Allocator) void {
-        switch (self) {
-            EntryCategory.Employment => {},
-            EntryCategory.Project => |*p| p.*.deinit(allocator),
-        }
-    }
 };
 
 /// Stores data about an entry (some kind of record).
@@ -54,8 +39,4 @@ pub const Entry = struct {
     dates: DateRange,
     data: EntryData,
     text: []const u8,
-
-    pub fn deinit(self: Self, allocator: Allocator) void {
-        self.data.deinit(allocator);
-    }
 };
