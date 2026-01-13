@@ -18,6 +18,13 @@ pub fn main() void {
     defer if (!arena.reset(.free_all)) @panic("Could not free all memory."); // FIXME: Update method of panicking
 
     render_content_listing(&arena, stderr, &content_listing);
+
+    const index = @import("renderer.zig").renderIndexPage(gpa_allocator) catch @panic("Couldn't render page.");
+    defer gpa_allocator.free(index);
+
+    std.debug.print("\n\n---\n{s}\n---\n", .{index});
+
+    filesystem.write_file("public", "index.html", index) catch |err| std.debug.panic("[E] {}\n", .{err});
 }
 
 /// Helper function to get filenames from content directory and handle errors.
