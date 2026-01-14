@@ -1,6 +1,7 @@
 const std = @import("std");
 const filesystem = @import("filesystem.zig");
 const parser = @import("parser.zig");
+const renderer = @import("renderer.zig");
 
 pub fn main() void {
     var gpa = std.heap.DebugAllocator(.{}).init;
@@ -60,6 +61,18 @@ fn render_content_listing(arena: *std.heap.ArenaAllocator, stderr: *std.io.Write
         };
         std.debug.print("title: {s}\n", .{entry.title});
         std.debug.print("{s}\n", .{entry.text});
+        const replacements = [_]renderer.Replacement{
+            .{ "{{title}}", entry.title },
+            .{ "{{company}}", entry.data.Employment.company },
+            .{ "{{content}}", entry.text },
+            .{ "{{startDate}}", entry.dates.s },
+            .{ "{{endDate}}", entry.dates.e },
+        };
+        const card = renderer.renderPartial(allocator, "templates/partials/job.html", &replacements) catch |err| {
+            stderr.print("[E] Could not render partial: {}.\n", .{err}) catch {};
+            std.process.exit(1);
+        };
+        std.debug.print("{s}\n", .{card});
     }
 
     if (!arena.reset(.retain_capacity)) stderr.print("[E] Could not reset arena.", .{}) catch {};
