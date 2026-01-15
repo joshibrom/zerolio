@@ -20,17 +20,15 @@ pub fn renderIndexPage(gpa: Allocator) ![]const u8 {
     return renderPartial(gpa, BASE_LAYOUT_PATH, &replacements);
 }
 
-pub fn renderPartial(gpa: Allocator, partial_path: []const u8, replacements: []const Replacement) ![]const u8 {
-    var arena = std.heap.ArenaAllocator.init(gpa);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+pub fn renderPartial(allocator: Allocator, partial_path: []const u8, replacements: []const Replacement) ![]const u8 {
     const partial = try filesystem.load_file(allocator, partial_path);
+    defer allocator.free(partial);
     var page = try allocator.dupe(u8, partial);
     for (replacements) |repl| {
         const needle, const replacement = repl;
         const prev_page = page;
         page = try std.mem.replaceOwned(u8, allocator, prev_page, needle, replacement);
+        allocator.free(prev_page);
     }
-    const output = try gpa.dupe(u8, page);
-    return output;
+    return page;
 }
