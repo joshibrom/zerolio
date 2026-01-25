@@ -9,7 +9,24 @@ const EntryCategory = models.EntryCategory;
 const METADATA_BEGIN = "<!-- METADATA\n";
 const METADATA_END = "METADATA -->";
 
-const DeferredString = struct { []const u8, bool };
+const DeferredString = struct {
+    const Self = @This();
+
+    val: []const u8,
+    set: bool,
+
+    pub fn new(default_value: ?[]const u8) Self {
+        return if (default_value) |val|
+            .{ .val = val, .set = true }
+        else
+            .{ .val = undefined, .set = false };
+    }
+
+    pub fn update(self: *Self, val: []const u8) void {
+        self.val = val;
+        self.set = true;
+    }
+};
 const KeyValPair = struct { []const u8, []const u8 };
 
 /// Parses some text contents from an HTML file into an `Entry`.
@@ -46,21 +63,21 @@ pub fn parseEntry(allocator: Allocator, text: []const u8, category: EntryCategor
         .Project => models.EntryData{ .Project = try parseProjectData(allocator, &kv_store.items) },
     };
     // Parse the remaining general fields
-    var title: DeferredString = .{ undefined, false };
-    var start_date: DeferredString = .{ undefined, false };
-    var end_date: DeferredString = .{ "Current", false };
+    var title: DeferredString = .new(null);
+    var start_date: DeferredString = .new(null);
+    var end_date: DeferredString = .new("Current");
     for (kv_store.items) |kv| {
         const key, const val = kv;
-        if (std.mem.eql(u8, key, "TITLE")) title = .{ val, true };
-        if (std.mem.eql(u8, key, "START")) start_date = .{ val, true };
-        if (std.mem.eql(u8, key, "END")) end_date = .{ val, true };
+        if (std.mem.eql(u8, key, "TITLE")) title.update(val);
+        if (std.mem.eql(u8, key, "START")) start_date.update(val);
+        if (std.mem.eql(u8, key, "END")) end_date.update(val);
     }
-    if (!title.@"1" or !start_date.@"1") return error.RequiredFieldsNotInitialized; // TODO: Handle each field
+    if (!title.set or !start_date.set) return error.RequiredFieldsNotInitialized; // TODO: Handle each field
     return .{
-        .title = title.@"0",
+        .title = title.val,
         .dates = .{
-            .s = start_date.@"0",
-            .e = end_date.@"0",
+            .s = start_date.val,
+            .e = end_date.val,
         },
         .data = data,
         .text = text[metadata_end_idx + METADATA_END.len ..],
@@ -68,33 +85,33 @@ pub fn parseEntry(allocator: Allocator, text: []const u8, category: EntryCategor
 }
 
 fn parseEmploymentData(kv_list: *[]KeyValPair) !models.EmploymentEntryData {
-    var company: DeferredString = .{ undefined, false };
+    var company: DeferredString = .new(null);
     for (kv_list.*) |kv| {
         const key, const val = kv;
-        if (std.mem.eql(u8, key, "COMPANY")) company = .{ val, true };
+        if (std.mem.eql(u8, key, "COMPANY")) company.update(val);
     }
-    if (!company.@"1") return error.NoCompanyGiven;
-    return .{ .company = company.@"0" };
+    if (!company.set) return error.NoCompanyGiven;
+    return .{ .company = company.val };
 }
 
 fn parseProjectData(allocator: Allocator, kv_list: *[]KeyValPair) !models.ProjectEntryData {
-    var brief: DeferredString = .{ undefined, false };
-    var image: DeferredString = .{ undefined, false };
+    var brief: DeferredString = .new(null);
+    var image: DeferredString = .new(null);
     var tags: std.ArrayList([]const u8) = .empty;
     var deployments: std.ArrayList([]const u8) = .empty;
     var repositories: std.ArrayList([]const u8) = .empty;
     for (kv_list.*) |kv| {
         const key, const val = kv;
-        if (std.mem.eql(u8, key, "BRIEF")) brief = .{ val, true };
-        if (std.mem.eql(u8, key, "IMAGE")) image = .{ val, true };
+        if (std.mem.eql(u8, key, "BRIEF")) brief.update(val);
+        if (std.mem.eql(u8, key, "IMAGE")) image.update(val);
         if (std.mem.eql(u8, key, "TAGS")) try tags.append(allocator, val);
         if (std.mem.eql(u8, key, "DEPLOYMENTS")) try deployments.append(allocator, val);
         if (std.mem.eql(u8, key, "REPOSITORIES")) try repositories.append(allocator, val);
     }
-    if (!brief.@"1" or !image.@"1") return error.RequiredFieldsNotInitialized; // TODO: Handle each field
+    if (!brief.set or !image.set) return error.RequiredFieldsNotInitialized; // TODO: Handle each field
     return .{
-        .brief = brief.@"0",
-        .image = image.@"0",
+        .brief = brief.val,
+        .image = image.val,
         .tags = try tags.toOwnedSlice(allocator),
         .deployments = try deployments.toOwnedSlice(allocator),
         .repositories = try repositories.toOwnedSlice(allocator),
